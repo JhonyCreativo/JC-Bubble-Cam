@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 import cv2
-from PIL import Image, ImageTk, ImageDraw
+from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import threading
 import time
 import os
@@ -149,12 +149,12 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular perfecta con borde blanco y fondo completamente transparente"""
+        """Crea una imagen circular perfecta con borde blanco suave y anti-aliasing avanzado"""
         final_size = self.bubble_size
-        border_width = 3  # Borde blanco fino
-        supersample = 4  # Supersampling para calidad
+        border_width = 4  # Borde ligeramente más grueso para mejor suavizado
+        supersample = 8  # Mayor supersampling para anti-aliasing superior
         
-        # Tamaños de trabajo
+        # Tamaños de trabajo para máxima calidad
         work_size = final_size * supersample
         work_border = border_width * supersample
         
@@ -169,45 +169,65 @@ class BubbleCamWindow:
         # Crear imagen base completamente transparente
         final_image = Image.new('RGBA', (work_size, work_size), (0, 0, 0, 0))
         
-        # Redimensionar video al tamaño de trabajo
+        # Redimensionar video con filtro de alta calidad
         video_image = image_cropped.resize((work_size, work_size), Image.Resampling.LANCZOS)
         video_rgba = video_image.convert('RGBA')
         
-        # Crear máscara circular para el video
-        mask = Image.new('L', (work_size, work_size), 0)
-        mask_draw = ImageDraw.Draw(mask)
-        
         center = work_size // 2
-        inner_radius = center - work_border  # Radio interno (video)
-        outer_radius = center - 1  # Radio externo (borde)
+        inner_radius = center - work_border
+        outer_radius = center - 2  # Margen para suavizado
         
-        # Dibujar círculo para el video (área interna)
-        mask_draw.ellipse((center - inner_radius, center - inner_radius,
-                          center + inner_radius, center + inner_radius), fill=255)
+        # === CREAR MÁSCARA DE VIDEO CON ANTI-ALIASING ===
+        video_mask = Image.new('L', (work_size, work_size), 0)
+        video_draw = ImageDraw.Draw(video_mask)
         
-        # Aplicar máscara al video
-        video_rgba.putalpha(mask)
+        # Círculo principal del video
+        video_draw.ellipse((center - inner_radius, center - inner_radius,
+                           center + inner_radius, center + inner_radius), fill=255)
         
-        # Crear máscara para el borde blanco
+        # Aplicar suavizado gaussiano para bordes perfectos
+        video_mask = video_mask.filter(ImageFilter.GaussianBlur(radius=2))
+        video_rgba.putalpha(video_mask)
+        
+        # === CREAR BORDE BLANCO CON GRADIENTE SUAVE ===
         border_mask = Image.new('L', (work_size, work_size), 0)
         border_draw = ImageDraw.Draw(border_mask)
         
-        # Dibujar anillo para el borde (área entre radio externo e interno)
-        border_draw.ellipse((center - outer_radius, center - outer_radius,
-                           center + outer_radius, center + outer_radius), fill=255)
-        border_draw.ellipse((center - inner_radius, center - inner_radius,
-                           center + inner_radius, center + inner_radius), fill=0)
+        # Crear múltiples capas de gradiente para borde ultra-suave
+        gradient_steps = 6
+        for step in range(gradient_steps):
+            alpha_value = int(255 * (step + 1) / gradient_steps)
+            step_radius = outer_radius - (step * 0.5)
+            inner_step_radius = inner_radius + (step * 0.8)
+            
+            if step_radius > inner_step_radius:
+                # Círculo exterior
+                border_draw.ellipse((center - step_radius, center - step_radius,
+                                   center + step_radius, center + step_radius), fill=alpha_value)
+                # Círculo interior (para crear el anillo)
+                border_draw.ellipse((center - inner_step_radius, center - inner_step_radius,
+                                   center + inner_step_radius, center + inner_step_radius), fill=0)
         
-        # Crear imagen del borde blanco
+        # Aplicar múltiples filtros de suavizado
+        border_mask = border_mask.filter(ImageFilter.GaussianBlur(radius=1.5))
+        border_mask = border_mask.filter(ImageFilter.SMOOTH_MORE)
+        
+        # Crear imagen del borde con el gradiente suave
         border_image = Image.new('RGBA', (work_size, work_size), (255, 255, 255, 255))
         border_image.putalpha(border_mask)
         
-        # Componer imagen final: primero borde, luego video
-        final_image.paste(border_image, (0, 0), border_image)
-        final_image.paste(video_rgba, (0, 0), video_rgba)
+        # === COMPOSICIÓN FINAL CON ANTI-ALIASING ===
+        # Aplicar borde con blending suave
+        final_image = Image.alpha_composite(final_image, border_image)
         
-        # Redimensionar al tamaño final
+        # Aplicar video con blending perfecto
+        final_image = Image.alpha_composite(final_image, video_rgba)
+        
+        # Redimensionar con filtro de alta calidad y anti-aliasing
         result = final_image.resize((final_size, final_size), Image.Resampling.LANCZOS)
+        
+        # Aplicar filtro final de suavizado sutil
+        result = result.filter(ImageFilter.SMOOTH)
         
         return result
     
@@ -589,9 +609,9 @@ class CameraApp:
         self.root.quit()
         self.root.destroy()
 
-def main():
-    """Función principal"""
-    print("Iniciando JC Bubble Cam...")
+def main_classic():
+    """Función principal con interfaz clásica (Tkinter)"""
+    print("Iniciando JC Bubble Cam (Interfaz Clásica)...")
     
     root = tk.Tk()
     
@@ -605,12 +625,35 @@ def main():
     # Manejar cierre de ventana
     root.protocol("WM_DELETE_WINDOW", app.close_app)
     
-    print("Interfaz gráfica iniciada")
+    print("Interfaz gráfica clásica iniciada")
     
     # Iniciar aplicación
     root.mainloop()
     
     print("Aplicación cerrada")
+
+def main():
+    """Función principal - Intenta usar interfaz moderna, fallback a clásica"""
+    print("🚀 Iniciando JC Bubble Cam...")
+    
+    try:
+        # Intentar usar la interfaz moderna
+        print("📱 Cargando interfaz moderna...")
+        from modern_ui import ModernCameraApp
+        
+        app = ModernCameraApp()
+        app.run()
+        
+    except ImportError as e:
+        print(f"⚠️  CustomTkinter no disponible: {e}")
+        print("📦 Para instalar: pip install customtkinter")
+        print("🔄 Usando interfaz clásica...")
+        main_classic()
+        
+    except Exception as e:
+        print(f"❌ Error en interfaz moderna: {e}")
+        print("🔄 Usando interfaz clásica como respaldo...")
+        main_classic()
 
 if __name__ == "__main__":
     main()
