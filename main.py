@@ -33,18 +33,19 @@ class BubbleCamWindow:
         self.bubble_window.title("JC Bubble Cam")
         
         # Configurar ventana circular perfecta con transparencia optimizada
-        self.bubble_size = 200  # Tamaño optimizado para calidad y rendimiento
+        self.bubble_size = 300  # Tamaño aumentado para aprovechar calidad HD
         self.bubble_window.geometry(f"{self.bubble_size}x{self.bubble_size}+100+100")
         self.bubble_window.resizable(False, False)
         self.bubble_window.attributes('-topmost', True)  # Siempre visible
         self.bubble_window.overrideredirect(True)  # Sin bordes del sistema
-        self.bubble_window.configure(bg='white')  # Fondo blanco limpio
+        self.bubble_window.configure(bg='black')  # Fondo negro para transparencia
+        self.bubble_window.attributes('-transparentcolor', 'black')  # Hacer fondo transparente
         
-        # Crear canvas optimizado para forma circular perfecta
+        # Crear canvas optimizado para forma circular perfecta sin fondo
         self.canvas = tk.Canvas(self.bubble_window, 
                                width=self.bubble_size, 
                                height=self.bubble_size,
-                               bg='white', 
+                               bg='black',  # Fondo negro para transparencia
                                highlightthickness=0,
                                bd=0, 
                                relief='flat')
@@ -53,8 +54,8 @@ class BubbleCamWindow:
         # Aplicar forma circular usando Windows API después de que la ventana se muestre
         self.bubble_window.after(100, self.apply_circular_shape)
         
-        # Crear área de video circular (sin borde aquí, se añadirá con PIL)
-        self.video_label = tk.Label(self.canvas, bg='white', text="🎥",
+        # Crear área de video circular con fondo transparente y sin distorsión inicial
+        self.video_label = tk.Label(self.canvas, bg='black', text="",  # Sin texto inicial para evitar distorsión
                                    fg='gray', font=('Arial', 24))
         self.video_canvas_item = self.canvas.create_window(self.bubble_size//2, 
                                                           self.bubble_size//2,
@@ -72,23 +73,27 @@ class BubbleCamWindow:
         self.start_camera()
     
     def apply_circular_shape(self):
-        """Aplica forma circular perfecta a la ventana con bordes optimizados"""
+        """Aplica forma circular perfecta a la ventana con bordes optimizados y sin latencia"""
         try:
             # Obtener el handle de la ventana
             hwnd = self.bubble_window.winfo_id()
             
-            # Crear región circular perfecta sin margen para bordes limpios
+            # Crear región circular perfecta con margen mínimo para bordes suaves
+            margin = 1  # Margen mínimo para suavizado
             hrgn = ctypes.windll.gdi32.CreateEllipticRgn(
-                0, 0, 
-                self.bubble_size, 
-                self.bubble_size
+                margin, margin, 
+                self.bubble_size - margin, 
+                self.bubble_size - margin
             )
             
-            # Aplicar la región a la ventana
-            ctypes.windll.user32.SetWindowRgn(hwnd, hrgn, True)
+            # Aplicar la región a la ventana de forma inmediata
+            ctypes.windll.user32.SetWindowRgn(hwnd, hrgn, False)  # False para evitar redibujado inmediato
             
-            # Aplicar efectos de suavizado y composición
+            # Aplicar efectos de suavizado optimizados
             self.apply_window_smoothing(hwnd)
+            
+            # Forzar actualización única
+            ctypes.windll.user32.UpdateWindow(hwnd)
             
         except Exception as e:
             print(f"Error aplicando forma circular: {e}")
@@ -129,14 +134,19 @@ class BubbleCamWindow:
             self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
             
             if not self.cap.isOpened():
-                self.video_label.config(text="Error: Cámara no disponible")
+                # Mostrar placeholder temporal sin texto para evitar distorsión
+                self.video_label.config(image="", text="")
                 return
                 
-            # Configuración optimizada para burbuja
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            self.cap.set(cv2.CAP_PROP_FPS, 30)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Configuración HD optimizada para baja latencia
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # HD 720p width
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)   # HD 720p height
+            self.cap.set(cv2.CAP_PROP_FPS, 60)             # 60 FPS para menor latencia
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 0)       # Sin buffer para latencia mínima
+            # Configuraciones adicionales para velocidad
+            self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M','J','P','G'))
+            self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)  # Exposición más rápida
+            self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)         # Desactivar enfoque automático para velocidad
             
             self.is_running = True
             
@@ -148,10 +158,10 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular perfecta con borde blanco suave y anti-aliasing avanzado"""
+        """Crea una imagen circular perfecta con borde blanco suave y anti-aliasing optimizado para HD"""
         final_size = self.bubble_size
-        border_width = 4  # Borde ligeramente más grueso para mejor suavizado
-        supersample = 8  # Mayor supersampling para anti-aliasing superior
+        border_width = 3  # Borde optimizado para HD
+        supersample = 2  # Supersampling mínimo para máximo rendimiento y menor latencia
         
         # Tamaños de trabajo para máxima calidad
         work_size = final_size * supersample
@@ -207,9 +217,8 @@ class BubbleCamWindow:
                 border_draw.ellipse((center - inner_step_radius, center - inner_step_radius,
                                    center + inner_step_radius, center + inner_step_radius), fill=0)
         
-        # Aplicar múltiples filtros de suavizado
-        border_mask = border_mask.filter(ImageFilter.GaussianBlur(radius=1.5))
-        border_mask = border_mask.filter(ImageFilter.SMOOTH_MORE)
+        # Aplicar filtro de suavizado optimizado para velocidad
+        border_mask = border_mask.filter(ImageFilter.GaussianBlur(radius=1.0))
         
         # Crear imagen del borde con el gradiente suave
         border_image = Image.new('RGBA', (work_size, work_size), (255, 255, 255, 255))
@@ -225,8 +234,7 @@ class BubbleCamWindow:
         # Redimensionar con filtro de alta calidad y anti-aliasing
         result = final_image.resize((final_size, final_size), Image.Resampling.LANCZOS)
         
-        # Aplicar filtro final de suavizado sutil
-        result = result.filter(ImageFilter.SMOOTH)
+        # Sin filtro final para máximo rendimiento
         
         return result
     
@@ -240,8 +248,8 @@ class BubbleCamWindow:
                 if ret:
                     frame_count += 1
                     
-                    # Procesar cada frame para la burbuja circular
-                    if frame_count % 1 == 0:  # Procesar todos los frames
+                    # Procesar frames optimizado para reducir latencia
+                    if frame_count % 3 == 0:  # Procesar cada 3 frames para reducir latencia
                         # Convertir a RGB primero
                         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         
@@ -260,17 +268,18 @@ class BubbleCamWindow:
                         else:
                             break
                             
-                time.sleep(0.033)  # ~30 FPS
+                time.sleep(0.016)  # ~60 FPS para reducir latencia
                 
             except Exception as e:
                 print(f"Error en video de burbuja: {e}")
                 break
                 
     def update_video_label(self, image_tk):
-        """Actualiza el label de video de forma thread-safe"""
+        """Actualiza el label de video de forma thread-safe y optimizada"""
         if self.is_running and self.video_label:
-            self.video_label.config(image=image_tk, text="")
-            self.video_label.image = image_tk
+            # Actualización optimizada sin configuraciones innecesarias
+            self.video_label.configure(image=image_tk)
+            self.video_label.image = image_tk  # Mantener referencia para evitar garbage collection
             
     def close_bubble(self):
         """Cierra la ventana burbuja"""
