@@ -48,15 +48,7 @@ class BubbleCamWindow:
                                bg='black', highlightthickness=0)
         self.canvas.pack()
         
-        # Crear círculo de fondo con borde blanco elegante
-        self.circle_bg = self.canvas.create_oval(3, 3, 
-                                                self.bubble_size-3, 
-                                                self.bubble_size-3,
-                                                fill='black', 
-                                                outline='white', 
-                                                width=4)  # Borde blanco más grueso
-        
-        # Crear área de video circular
+        # Crear área de video circular (sin borde aquí, se añadirá con PIL)
         self.video_label = tk.Label(self.canvas, bg='black', text="🎥",
                                    fg='white', font=('Arial', 24))
         self.video_canvas_item = self.canvas.create_window(self.bubble_size//2, 
@@ -110,9 +102,11 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular con máscara de recorte perfecta"""
-        # Calcular el tamaño del círculo interior (dejando espacio para el borde)
-        circle_size = self.bubble_size - 16  # Margen para el borde blanco
+        """Crea una imagen circular con máscara de recorte perfecta y borde suave"""
+        # Usar supersampling para antialiasing perfecto
+        supersample = 4  # Factor de supersampling
+        final_size = self.bubble_size
+        work_size = final_size * supersample
         
         # Redimensionar la imagen manteniendo proporción
         original_width, original_height = image_pil.size
@@ -136,18 +130,48 @@ class BubbleCamWindow:
         # Recortar imagen cuadrada desde el centro
         image_cropped = image_pil.crop((left, top, right, bottom))
         
-        # Redimensionar al tamaño del círculo
-        image_resized = image_cropped.resize((circle_size, circle_size), Image.Resampling.LANCZOS)
+        # Redimensionar al tamaño de trabajo (supersampling)
+        image_work = image_cropped.resize((work_size, work_size), Image.Resampling.LANCZOS)
         
-        # Crear máscara circular perfecta
-        mask = Image.new('L', (circle_size, circle_size), 0)
+        # Crear imagen final con fondo transparente
+        final_image = Image.new('RGBA', (work_size, work_size), (0, 0, 0, 0))
+        
+        # Crear máscara circular perfecta con antialiasing
+        mask = Image.new('L', (work_size, work_size), 0)
         draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, circle_size, circle_size), fill=255)
         
-        # Aplicar máscara circular
-        image_resized.putalpha(mask)
+        # Dibujar círculo con borde blanco suave
+        border_width = 8 * supersample  # Borde escalado
         
-        return image_resized
+        # Círculo exterior (borde blanco)
+        draw.ellipse((0, 0, work_size, work_size), fill=255)
+        
+        # Círculo interior (para el video)
+        inner_margin = border_width
+        draw.ellipse((inner_margin, inner_margin, 
+                     work_size - inner_margin, work_size - inner_margin), fill=0)
+        
+        # Crear máscara para el video
+        video_mask = Image.new('L', (work_size, work_size), 0)
+        video_draw = ImageDraw.Draw(video_mask)
+        video_draw.ellipse((inner_margin, inner_margin, 
+                           work_size - inner_margin, work_size - inner_margin), fill=255)
+        
+        # Aplicar máscara al video
+        image_work.putalpha(video_mask)
+        
+        # Crear borde blanco
+        border_image = Image.new('RGBA', (work_size, work_size), (255, 255, 255, 255))
+        border_image.putalpha(mask)
+        
+        # Combinar borde y video
+        final_image.paste(border_image, (0, 0), border_image)
+        final_image.paste(image_work, (0, 0), image_work)
+        
+        # Redimensionar al tamaño final con antialiasing
+        final_image = final_image.resize((final_size, final_size), Image.Resampling.LANCZOS)
+        
+        return final_image
     
     def update_video(self):
         """Actualiza el video circular en la burbuja con máscara de recorte perfecta"""

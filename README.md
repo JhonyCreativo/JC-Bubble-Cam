@@ -68,11 +68,11 @@ Aplicación de escritorio para visualización de cámaras web con interfaz moder
 1. **Detección automática de cámaras** - La aplicación detecta automáticamente las cámaras disponibles
 2. **Selección de cámara** - Usa el menú desplegable para elegir la cámara
 3. **Vista previa optimizada** - Haz clic en "Iniciar Cámara" para ver la transmisión en tiempo real
-4. **🎥 Bubble Cam Circular Elegante (Estilo Loom)** - Crea una ventana flotante circular arrastrable en el escritorio con la cámara activa
-   - Diseño circular perfecto como las burbujas de Loom
+4. **🎥 Bubble Cam Circular Perfecto (Estilo Loom)** - Crea una ventana flotante circular arrastrable en el escritorio con la cámara activa
+   - **Borde circular perfecto** - Antialiasing avanzado con supersampling 4x
    - **Fondo completamente transparente** - El escritorio se ve a través de la burbuja
    - **Máscara de recorte inteligente** - Evita distorsión recortando desde el centro
-   - **Borde blanco elegante** - Marco blanco de 4px para máxima visibilidad
+   - **Borde blanco suave** - Sin pixelado, círculo matemáticamente perfecto
    - **Diseño ultra-limpio** - Sin botones visibles, doble clic para cerrar
    - Transparencia real del sistema operativo Windows
    - Ventana siempre visible (topmost)
@@ -87,8 +87,9 @@ Aplicación de escritorio para visualización de cámaras web con interfaz moder
 1. **Selecciona una cámara** en el menú desplegable
 2. **Inicia la vista previa** haciendo clic en "Iniciar Cámara"
 3. **Abre Bubble Cam** haciendo clic en "🎥 Abrir Bubble Cam"
-4. **Arrastra la burbuja** a cualquier posición del escritorio
-5. **Cierra cuando termines** haciendo **doble clic** en la burbuja (diseño ultra-limpio)
+4. **Disfruta del círculo perfecto sin pixelado**
+5. **Arrastra la burbuja** a cualquier posición del escritorio
+6. **Cierra cuando termines** haciendo **doble clic** en la burbuja (diseño ultra-limpio)
 
 ## Optimizaciones de Rendimiento
 
