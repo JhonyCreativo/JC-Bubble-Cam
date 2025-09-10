@@ -27,17 +27,17 @@ class BubbleCamWindow:
         self.create_bubble_window()
         
     def create_bubble_window(self):
-        """Crea la ventana flotante circular estilo Loom con transparencia"""
+        """Crea la ventana flotante circular estilo Loom con transparencia y diseño elegante"""
         self.bubble_window = tk.Toplevel()
         self.bubble_window.title("JC Bubble Cam")
         
         # Configurar ventana circular con transparencia
-        self.bubble_size = 150  # Tamaño de la burbuja circular
+        self.bubble_size = 160  # Tamaño ligeramente mayor para mejor calidad
         self.bubble_window.geometry(f"{self.bubble_size}x{self.bubble_size}+100+100")
         self.bubble_window.resizable(False, False)
         self.bubble_window.attributes('-topmost', True)  # Siempre visible
         self.bubble_window.attributes('-transparentcolor', 'black')  # Transparencia real
-        self.bubble_window.attributes('-alpha', 0.95)  # Ligera transparencia general
+        self.bubble_window.attributes('-alpha', 0.98)  # Casi opaco para mejor calidad
         self.bubble_window.overrideredirect(True)  # Sin bordes del sistema
         self.bubble_window.configure(bg='black')  # Color que será transparente
         
@@ -48,34 +48,28 @@ class BubbleCamWindow:
                                bg='black', highlightthickness=0)
         self.canvas.pack()
         
-        # Crear círculo de fondo semi-transparente con borde
-        self.circle_bg = self.canvas.create_oval(5, 5, 
-                                                self.bubble_size-5, 
-                                                self.bubble_size-5,
-                                                fill='#2c3e50', 
-                                                outline='#3498db', 
-                                                width=2,
-                                                stipple='gray50')  # Patrón para transparencia visual
+        # Crear círculo de fondo con borde blanco elegante
+        self.circle_bg = self.canvas.create_oval(3, 3, 
+                                                self.bubble_size-3, 
+                                                self.bubble_size-3,
+                                                fill='black', 
+                                                outline='white', 
+                                                width=4)  # Borde blanco más grueso
         
         # Crear área de video circular
         self.video_label = tk.Label(self.canvas, bg='black', text="🎥",
-                                   fg='white', font=('Arial', 20))
+                                   fg='white', font=('Arial', 24))
         self.video_canvas_item = self.canvas.create_window(self.bubble_size//2, 
                                                           self.bubble_size//2,
                                                           window=self.video_label)
         
-        # Crear botón cerrar pequeño en la esquina
-        self.close_btn = tk.Button(self.canvas, text="✕", bg='#e74c3c', fg='white',
-                                  font=('Arial', 8, 'bold'), bd=0, width=2, height=1,
-                                  command=self.close_bubble)
-        self.close_canvas_item = self.canvas.create_window(self.bubble_size-15, 15,
-                                                          window=self.close_btn)
-        
-        # Hacer toda la ventana arrastrable
+        # Hacer toda la ventana arrastrable (sin botón X)
         self.canvas.bind('<Button-1>', self.start_drag)
         self.canvas.bind('<B1-Motion>', self.drag_window)
+        self.canvas.bind('<Double-Button-1>', self.close_bubble)  # Doble clic para cerrar
         self.video_label.bind('<Button-1>', self.start_drag)
         self.video_label.bind('<B1-Motion>', self.drag_window)
+        self.video_label.bind('<Double-Button-1>', self.close_bubble)  # Doble clic para cerrar
         
         # Iniciar cámara
         self.start_camera()
@@ -116,25 +110,47 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular con máscara"""
-        # Crear máscara circular
-        size = min(image_pil.size)
-        mask = Image.new('L', (size, size), 0)
+        """Crea una imagen circular con máscara de recorte perfecta"""
+        # Calcular el tamaño del círculo interior (dejando espacio para el borde)
+        circle_size = self.bubble_size - 16  # Margen para el borde blanco
         
-        # Dibujar círculo blanco en la máscara
+        # Redimensionar la imagen manteniendo proporción
+        original_width, original_height = image_pil.size
+        
+        # Calcular el recorte cuadrado desde el centro para evitar distorsión
+        if original_width > original_height:
+            # Imagen horizontal - recortar los lados
+            crop_size = original_height
+            left = (original_width - crop_size) // 2
+            top = 0
+            right = left + crop_size
+            bottom = crop_size
+        else:
+            # Imagen vertical - recortar arriba y abajo
+            crop_size = original_width
+            left = 0
+            top = (original_height - crop_size) // 2
+            right = crop_size
+            bottom = top + crop_size
+        
+        # Recortar imagen cuadrada desde el centro
+        image_cropped = image_pil.crop((left, top, right, bottom))
+        
+        # Redimensionar al tamaño del círculo
+        image_resized = image_cropped.resize((circle_size, circle_size), Image.Resampling.LANCZOS)
+        
+        # Crear máscara circular perfecta
+        mask = Image.new('L', (circle_size, circle_size), 0)
         draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, size, size), fill=255)
-        
-        # Redimensionar imagen a cuadrado
-        image_square = image_pil.resize((size, size), Image.Resampling.LANCZOS)
+        draw.ellipse((0, 0, circle_size, circle_size), fill=255)
         
         # Aplicar máscara circular
-        image_square.putalpha(mask)
+        image_resized.putalpha(mask)
         
-        return image_square
+        return image_resized
     
     def update_video(self):
-        """Actualiza el video circular en la burbuja"""
+        """Actualiza el video circular en la burbuja con máscara de recorte perfecta"""
         frame_count = 0
         
         while self.is_running and self.cap and self.cap.isOpened():
@@ -145,17 +161,13 @@ class BubbleCamWindow:
                     
                     # Procesar cada frame para la burbuja circular
                     if frame_count % 1 == 0:  # Procesar todos los frames
-                        # Redimensionar para la burbuja circular
-                        bubble_size = self.bubble_size - 20  # Dejar margen para el borde
-                        frame_resized = cv2.resize(frame, (bubble_size, bubble_size))
+                        # Convertir a RGB primero
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         
-                        # Convertir a RGB
-                        frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
-                        
-                        # Convertir a PIL
+                        # Convertir a PIL para procesamiento de máscara
                         image_pil = Image.fromarray(frame_rgb)
                         
-                        # Crear imagen circular
+                        # Crear imagen circular con recorte perfecto
                         circular_image = self.create_circular_image(image_pil)
                         
                         # Convertir a PhotoImage
