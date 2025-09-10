@@ -246,7 +246,7 @@ class ModernCameraApp:
                         pass
                 
                 # Importar y crear nueva burbuja
-                from main import BubbleCamWindow
+                from bubble_camera import BubbleCamWindow
                 self.bubble_window = BubbleCamWindow(self.selected_camera)
                 
                 # Feedback de éxito
