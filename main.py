@@ -5,6 +5,8 @@ from PIL import Image, ImageTk, ImageDraw
 import threading
 import time
 import os
+import ctypes
+from ctypes import wintypes
 
 # Optimizaciones de rendimiento
 os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'  # Desactivar MSMF para mejor rendimiento
@@ -36,21 +38,22 @@ class BubbleCamWindow:
         self.bubble_window.geometry(f"{self.bubble_size}x{self.bubble_size}+100+100")
         self.bubble_window.resizable(False, False)
         self.bubble_window.attributes('-topmost', True)  # Siempre visible
-        self.bubble_window.attributes('-transparentcolor', 'black')  # Transparencia real
-        self.bubble_window.attributes('-alpha', 0.98)  # Casi opaco para mejor calidad
         self.bubble_window.overrideredirect(True)  # Sin bordes del sistema
-        self.bubble_window.configure(bg='black')  # Color que será transparente
+        self.bubble_window.configure(bg='white')  # Fondo blanco para el borde
         
-        # Crear canvas para la forma circular con transparencia
+        # Crear canvas para la forma circular
         self.canvas = tk.Canvas(self.bubble_window, 
                                width=self.bubble_size, 
                                height=self.bubble_size,
-                               bg='black', highlightthickness=0)
+                               bg='white', highlightthickness=0)
         self.canvas.pack()
         
+        # Aplicar forma circular usando Windows API después de que la ventana se muestre
+        self.bubble_window.after(100, self.apply_circular_shape)
+        
         # Crear área de video circular (sin borde aquí, se añadirá con PIL)
-        self.video_label = tk.Label(self.canvas, bg='black', text="🎥",
-                                   fg='white', font=('Arial', 24))
+        self.video_label = tk.Label(self.canvas, bg='white', text="🎥",
+                                   fg='gray', font=('Arial', 24))
         self.video_canvas_item = self.canvas.create_window(self.bubble_size//2, 
                                                           self.bubble_size//2,
                                                           window=self.video_label)
@@ -65,6 +68,21 @@ class BubbleCamWindow:
         
         # Iniciar cámara
         self.start_camera()
+    
+    def apply_circular_shape(self):
+        """Aplica forma circular perfecta a la ventana usando Windows API"""
+        try:
+            # Obtener el handle de la ventana
+            hwnd = self.bubble_window.winfo_id()
+            
+            # Crear región circular
+            hrgn = ctypes.windll.gdi32.CreateEllipticRgn(0, 0, self.bubble_size, self.bubble_size)
+            
+            # Aplicar la región a la ventana
+            ctypes.windll.user32.SetWindowRgn(hwnd, hrgn, True)
+            
+        except Exception as e:
+            print(f"Error aplicando forma circular: {e}")
         
     def start_drag(self, event):
         """Inicia el arrastre de la ventana"""
@@ -102,11 +120,9 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular con máscara de recorte perfecta y borde suave"""
-        # Usar supersampling para antialiasing perfecto
-        supersample = 4  # Factor de supersampling
+        """Crea una imagen circular con borde blanco perfecto"""
         final_size = self.bubble_size
-        work_size = final_size * supersample
+        border_width = 8  # Borde blanco
         
         # Redimensionar la imagen manteniendo proporción
         original_width, original_height = image_pil.size
@@ -130,46 +146,25 @@ class BubbleCamWindow:
         # Recortar imagen cuadrada desde el centro
         image_cropped = image_pil.crop((left, top, right, bottom))
         
-        # Redimensionar al tamaño de trabajo (supersampling)
-        image_work = image_cropped.resize((work_size, work_size), Image.Resampling.LANCZOS)
+        # Crear imagen final con fondo blanco (para el borde)
+        final_image = Image.new('RGB', (final_size, final_size), (255, 255, 255))
         
-        # Crear imagen final con fondo transparente
-        final_image = Image.new('RGBA', (work_size, work_size), (0, 0, 0, 0))
+        # Calcular tamaño del video (círculo interior)
+        video_size = final_size - (border_width * 2)
+        video_image = image_cropped.resize((video_size, video_size), Image.Resampling.LANCZOS)
         
-        # Crear máscara circular perfecta con antialiasing
-        mask = Image.new('L', (work_size, work_size), 0)
+        # Crear máscara circular para el video
+        mask = Image.new('L', (video_size, video_size), 0)
         draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, video_size, video_size), fill=255)
         
-        # Dibujar círculo con borde blanco suave
-        border_width = 8 * supersample  # Borde escalado
+        # Aplicar máscara circular al video
+        video_circular = Image.new('RGB', (video_size, video_size), (255, 255, 255))
+        video_circular.paste(video_image, (0, 0))
+        video_circular.putalpha(mask)
         
-        # Círculo exterior (borde blanco)
-        draw.ellipse((0, 0, work_size, work_size), fill=255)
-        
-        # Círculo interior (para el video)
-        inner_margin = border_width
-        draw.ellipse((inner_margin, inner_margin, 
-                     work_size - inner_margin, work_size - inner_margin), fill=0)
-        
-        # Crear máscara para el video
-        video_mask = Image.new('L', (work_size, work_size), 0)
-        video_draw = ImageDraw.Draw(video_mask)
-        video_draw.ellipse((inner_margin, inner_margin, 
-                           work_size - inner_margin, work_size - inner_margin), fill=255)
-        
-        # Aplicar máscara al video
-        image_work.putalpha(video_mask)
-        
-        # Crear borde blanco
-        border_image = Image.new('RGBA', (work_size, work_size), (255, 255, 255, 255))
-        border_image.putalpha(mask)
-        
-        # Combinar borde y video
-        final_image.paste(border_image, (0, 0), border_image)
-        final_image.paste(image_work, (0, 0), image_work)
-        
-        # Redimensionar al tamaño final con antialiasing
-        final_image = final_image.resize((final_size, final_size), Image.Resampling.LANCZOS)
+        # Pegar el video circular en el centro de la imagen final
+        final_image.paste(video_circular, (border_width, border_width), video_circular)
         
         return final_image
     

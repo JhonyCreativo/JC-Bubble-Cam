@@ -72,7 +72,7 @@ Aplicación de escritorio para visualización de cámaras web con interfaz moder
    - **Borde circular perfecto** - Antialiasing avanzado con supersampling 4x
    - **Fondo completamente transparente** - El escritorio se ve a través de la burbuja
    - **Máscara de recorte inteligente** - Evita distorsión recortando desde el centro
-   - **Borde blanco suave** - Sin pixelado, círculo matemáticamente perfecto
+   - **Borde blanco perfecto**: Sin bordes oscuros externos, círculo completo
    - **Diseño ultra-limpio** - Sin botones visibles, doble clic para cerrar
    - Transparencia real del sistema operativo Windows
    - Ventana siempre visible (topmost)
