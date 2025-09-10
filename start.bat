@@ -1,0 +1,9 @@
+@echo off
+echo Iniciando JC Bubble Cam (Optimizado)...
+echo.
+echo Activando entorno virtual...
+call venv\Scripts\activate.bat
+echo.
+echo Ejecutando aplicacion...
+python main.py
+pause
