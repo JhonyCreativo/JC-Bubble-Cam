@@ -34,15 +34,15 @@ class BubbleCamWindow:
         self.bubble_window.resizable(False, False)
         self.bubble_window.attributes('-topmost', True)  # Siempre visible
         self.bubble_window.overrideredirect(True)  # Sin bordes del sistema
-        self.bubble_window.configure(bg='#010101')  # Fondo casi negro para transparencia
-        self.bubble_window.attributes('-transparentcolor', '#010101')  # Hacer fondo transparente
+        self.bubble_window.configure(bg='black')  # Fondo negro para transparencia
+        self.bubble_window.attributes('-transparentcolor', 'black')  # Hacer fondo transparente
         
         # Crear canvas optimizado para forma circular perfecta sin fondo
         self.canvas = tk.Canvas(
             self.bubble_window,
             width=self.bubble_size,
             height=self.bubble_size,
-            bg='#010101',  # Mismo color transparente que la ventana
+            bg='black',  # Fondo negro para transparencia
             highlightthickness=0,
             bd=0
         )
@@ -51,13 +51,13 @@ class BubbleCamWindow:
         # Aplicar forma circular después de que la ventana esté lista
         self.bubble_window.after(100, self.apply_circular_shape)
         
-        # Crear área de video circular completamente transparente
+        # Crear área de video circular con fondo transparente y sin distorsión inicial
         self.video_label = tk.Label(
             self.canvas, 
-            bg='#010101',  # Mismo color transparente que la ventana
-            text="",  # Sin texto inicial
-            bd=0,
-            highlightthickness=0
+            bg='black', 
+            text="",  # Sin texto inicial para evitar distorsión
+            fg='gray', 
+            font=('Arial', 24)
         )
         self.video_canvas_item = self.canvas.create_window(
             self.bubble_size//2, 
@@ -163,9 +163,14 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular perfecta con transparencia total y bordes limpios"""
+        """Crea una imagen circular perfecta con borde blanco suave y anti-aliasing optimizado para HD"""
         final_size = self.bubble_size
-        border_width = 2  # Borde más delgado para mayor claridad
+        border_width = 3  # Borde optimizado para HD
+        supersample = 2  # Supersampling mínimo para máximo rendimiento y menor latencia
+        
+        # Tamaños de trabajo para máxima calidad
+        work_size = final_size * supersample
+        work_border = border_width * supersample
         
         # Recorte cuadrado desde el centro
         original_width, original_height = image_pil.size
@@ -175,40 +180,66 @@ class BubbleCamWindow:
         top = (original_height - crop_size) // 2
         image_cropped = image_pil.crop((left, top, left + crop_size, top + crop_size))
         
-        # Redimensionar video directamente al tamaño final
-        video_image = image_cropped.resize((final_size, final_size), Image.Resampling.LANCZOS)
+        # Crear imagen base completamente transparente
+        final_image = Image.new('RGBA', (work_size, work_size), (0, 0, 0, 0))
+        
+        # Redimensionar video con filtro de alta calidad
+        video_image = image_cropped.resize((work_size, work_size), Image.Resampling.LANCZOS)
         video_rgba = video_image.convert('RGBA')
         
-        center = final_size // 2
-        radius = center - border_width
+        center = work_size // 2
+        inner_radius = center - work_border
+        outer_radius = center - 2  # Margen para suavizado
         
-        # === CREAR MÁSCARA CIRCULAR PERFECTA ===
-        mask = Image.new('L', (final_size, final_size), 0)
-        mask_draw = ImageDraw.Draw(mask)
+        # === CREAR MÁSCARA DE VIDEO CON ANTI-ALIASING ===
+        video_mask = Image.new('L', (work_size, work_size), 0)
+        video_draw = ImageDraw.Draw(video_mask)
         
-        # Círculo con bordes suaves
-        mask_draw.ellipse((center - radius, center - radius,
-                          center + radius, center + radius), fill=255)
+        # Círculo principal del video
+        video_draw.ellipse((center - inner_radius, center - inner_radius,
+                           center + inner_radius, center + inner_radius), fill=255)
         
-        # Suavizado mínimo para bordes limpios
-        mask = mask.filter(ImageFilter.GaussianBlur(radius=0.8))
+        # Aplicar suavizado gaussiano para bordes perfectos
+        video_mask = video_mask.filter(ImageFilter.GaussianBlur(radius=2))
+        video_rgba.putalpha(video_mask)
         
-        # === CREAR IMAGEN FINAL COMPLETAMENTE TRANSPARENTE ===
-        result = Image.new('RGBA', (final_size, final_size), (0, 0, 0, 0))
+        # === CREAR BORDE BLANCO CON GRADIENTE SUAVE ===
+        border_mask = Image.new('L', (work_size, work_size), 0)
+        border_draw = ImageDraw.Draw(border_mask)
         
-        # Aplicar máscara directamente al video
-        video_rgba.putalpha(mask)
+        # Crear múltiples capas de gradiente para borde ultra-suave
+        gradient_steps = 6
+        for step in range(gradient_steps):
+            alpha_value = int(255 * (step + 1) / gradient_steps)
+            step_radius = outer_radius - (step * 0.5)
+            inner_step_radius = inner_radius + (step * 0.8)
+            
+            if step_radius > inner_step_radius:
+                # Círculo exterior
+                border_draw.ellipse((center - step_radius, center - step_radius,
+                                   center + step_radius, center + step_radius), fill=alpha_value)
+                # Círculo interior (para crear el anillo)
+                border_draw.ellipse((center - inner_step_radius, center - inner_step_radius,
+                                   center + inner_step_radius, center + inner_step_radius), fill=0)
         
-        # Pegar video con transparencia perfecta
-        result.paste(video_rgba, (0, 0), video_rgba)
+        # Aplicar filtro de suavizado optimizado para velocidad
+        border_mask = border_mask.filter(ImageFilter.GaussianBlur(radius=1.0))
         
-        # === AGREGAR BORDE BLANCO SIMPLE ===
-        border_draw = ImageDraw.Draw(result)
+        # Crear imagen del borde con el gradiente suave
+        border_image = Image.new('RGBA', (work_size, work_size), (255, 255, 255, 255))
+        border_image.putalpha(border_mask)
         
-        # Borde circular blanco simple
-        border_draw.ellipse((center - radius - 1, center - radius - 1,
-                            center + radius + 1, center + radius + 1),
-                           outline=(255, 255, 255, 200), width=2)
+        # === COMPOSICIÓN FINAL CON ANTI-ALIASING ===
+        # Aplicar borde con blending suave
+        final_image = Image.alpha_composite(final_image, border_image)
+        
+        # Aplicar video con blending perfecto
+        final_image = Image.alpha_composite(final_image, video_rgba)
+        
+        # Redimensionar con filtro de alta calidad y anti-aliasing
+        result = final_image.resize((final_size, final_size), Image.Resampling.LANCZOS)
+        
+        # Sin filtro final para máximo rendimiento
         
         return result
     
