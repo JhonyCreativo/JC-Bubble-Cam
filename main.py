@@ -70,19 +70,46 @@ class BubbleCamWindow:
         self.start_camera()
     
     def apply_circular_shape(self):
-        """Aplica forma circular perfecta a la ventana usando Windows API"""
+        """Aplica forma circular perfecta a la ventana usando Windows API con antialiasing"""
         try:
             # Obtener el handle de la ventana
             hwnd = self.bubble_window.winfo_id()
             
-            # Crear región circular
-            hrgn = ctypes.windll.gdi32.CreateEllipticRgn(0, 0, self.bubble_size, self.bubble_size)
+            # Crear región circular con margen para suavizado
+            margin = 1  # Pequeño margen para bordes más suaves
+            hrgn = ctypes.windll.gdi32.CreateEllipticRgn(
+                margin, margin, 
+                self.bubble_size - margin, 
+                self.bubble_size - margin
+            )
             
             # Aplicar la región a la ventana
             ctypes.windll.user32.SetWindowRgn(hwnd, hrgn, True)
             
+            # Aplicar efecto de suavizado adicional
+            self.apply_window_smoothing(hwnd)
+            
         except Exception as e:
             print(f"Error aplicando forma circular: {e}")
+    
+    def apply_window_smoothing(self, hwnd):
+        """Aplica suavizado adicional a la ventana"""
+        try:
+            # Habilitar composición de ventana para mejor antialiasing
+            ctypes.windll.dwmapi.DwmEnableComposition(1)
+            
+            # Configurar atributos de ventana para mejor renderizado
+            DWMWA_NCRENDERING_POLICY = 2
+            DWMNCRP_ENABLED = 2
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 
+                DWMWA_NCRENDERING_POLICY, 
+                ctypes.byref(ctypes.c_int(DWMNCRP_ENABLED)), 
+                ctypes.sizeof(ctypes.c_int)
+            )
+            
+        except Exception as e:
+            print(f"Error aplicando suavizado: {e}")
         
     def start_drag(self, event):
         """Inicia el arrastre de la ventana"""
@@ -120,9 +147,14 @@ class BubbleCamWindow:
             self.video_label.config(text=f"Error: {str(e)}")
             
     def create_circular_image(self, image_pil):
-        """Crea una imagen circular con borde blanco perfecto"""
+        """Crea una imagen circular con borde blanco perfecto y antialiasing"""
         final_size = self.bubble_size
         border_width = 8  # Borde blanco
+        supersample = 4  # Factor de supersampling para antialiasing
+        
+        # Tamaños de trabajo con supersampling
+        work_size = final_size * supersample
+        work_border = border_width * supersample
         
         # Redimensionar la imagen manteniendo proporción
         original_width, original_height = image_pil.size
@@ -146,25 +178,29 @@ class BubbleCamWindow:
         # Recortar imagen cuadrada desde el centro
         image_cropped = image_pil.crop((left, top, right, bottom))
         
-        # Crear imagen final con fondo blanco (para el borde)
-        final_image = Image.new('RGB', (final_size, final_size), (255, 255, 255))
+        # Crear imagen de trabajo con supersampling
+        work_image = Image.new('RGB', (work_size, work_size), (255, 255, 255))
         
-        # Calcular tamaño del video (círculo interior)
-        video_size = final_size - (border_width * 2)
-        video_image = image_cropped.resize((video_size, video_size), Image.Resampling.LANCZOS)
+        # Calcular tamaño del video con supersampling
+        video_work_size = work_size - (work_border * 2)
+        video_image = image_cropped.resize((video_work_size, video_work_size), Image.Resampling.LANCZOS)
         
-        # Crear máscara circular para el video
-        mask = Image.new('L', (video_size, video_size), 0)
+        # Crear máscara circular suavizada con supersampling
+        mask = Image.new('L', (video_work_size, video_work_size), 0)
         draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, video_size, video_size), fill=255)
+        # Dibujar círculo con antialiasing usando supersampling
+        draw.ellipse((0, 0, video_work_size-1, video_work_size-1), fill=255)
         
         # Aplicar máscara circular al video
-        video_circular = Image.new('RGB', (video_size, video_size), (255, 255, 255))
+        video_circular = Image.new('RGB', (video_work_size, video_work_size), (255, 255, 255))
         video_circular.paste(video_image, (0, 0))
         video_circular.putalpha(mask)
         
-        # Pegar el video circular en el centro de la imagen final
-        final_image.paste(video_circular, (border_width, border_width), video_circular)
+        # Pegar el video circular en el centro de la imagen de trabajo
+        work_image.paste(video_circular, (work_border, work_border), video_circular)
+        
+        # Redimensionar al tamaño final con antialiasing Lanczos para suavizar
+        final_image = work_image.resize((final_size, final_size), Image.Resampling.LANCZOS)
         
         return final_image
     
