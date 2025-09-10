@@ -1,7 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox, ttk
 import cv2
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 import threading
 import time
 import os
@@ -9,6 +9,185 @@ import os
 # Optimizaciones de rendimiento
 os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'  # Desactivar MSMF para mejor rendimiento
 os.environ['OPENCV_VIDEOIO_DEBUG'] = '0'  # Desactivar debug de OpenCV
+
+class BubbleCamWindow:
+    """Ventana flotante arrastrable para Bubble Cam"""
+    
+    def __init__(self, camera_index):
+        self.camera_index = camera_index
+        self.cap = None
+        self.is_running = False
+        self.bubble_window = None
+        self.video_label = None
+        
+        # Variables para arrastrar la ventana
+        self.start_x = 0
+        self.start_y = 0
+        
+        self.create_bubble_window()
+        
+    def create_bubble_window(self):
+        """Crea la ventana flotante circular estilo Loom con transparencia"""
+        self.bubble_window = tk.Toplevel()
+        self.bubble_window.title("JC Bubble Cam")
+        
+        # Configurar ventana circular con transparencia
+        self.bubble_size = 150  # Tamaño de la burbuja circular
+        self.bubble_window.geometry(f"{self.bubble_size}x{self.bubble_size}+100+100")
+        self.bubble_window.resizable(False, False)
+        self.bubble_window.attributes('-topmost', True)  # Siempre visible
+        self.bubble_window.attributes('-transparentcolor', 'black')  # Transparencia real
+        self.bubble_window.attributes('-alpha', 0.95)  # Ligera transparencia general
+        self.bubble_window.overrideredirect(True)  # Sin bordes del sistema
+        self.bubble_window.configure(bg='black')  # Color que será transparente
+        
+        # Crear canvas para la forma circular con transparencia
+        self.canvas = tk.Canvas(self.bubble_window, 
+                               width=self.bubble_size, 
+                               height=self.bubble_size,
+                               bg='black', highlightthickness=0)
+        self.canvas.pack()
+        
+        # Crear círculo de fondo semi-transparente con borde
+        self.circle_bg = self.canvas.create_oval(5, 5, 
+                                                self.bubble_size-5, 
+                                                self.bubble_size-5,
+                                                fill='#2c3e50', 
+                                                outline='#3498db', 
+                                                width=2,
+                                                stipple='gray50')  # Patrón para transparencia visual
+        
+        # Crear área de video circular
+        self.video_label = tk.Label(self.canvas, bg='black', text="🎥",
+                                   fg='white', font=('Arial', 20))
+        self.video_canvas_item = self.canvas.create_window(self.bubble_size//2, 
+                                                          self.bubble_size//2,
+                                                          window=self.video_label)
+        
+        # Crear botón cerrar pequeño en la esquina
+        self.close_btn = tk.Button(self.canvas, text="✕", bg='#e74c3c', fg='white',
+                                  font=('Arial', 8, 'bold'), bd=0, width=2, height=1,
+                                  command=self.close_bubble)
+        self.close_canvas_item = self.canvas.create_window(self.bubble_size-15, 15,
+                                                          window=self.close_btn)
+        
+        # Hacer toda la ventana arrastrable
+        self.canvas.bind('<Button-1>', self.start_drag)
+        self.canvas.bind('<B1-Motion>', self.drag_window)
+        self.video_label.bind('<Button-1>', self.start_drag)
+        self.video_label.bind('<B1-Motion>', self.drag_window)
+        
+        # Iniciar cámara
+        self.start_camera()
+        
+    def start_drag(self, event):
+        """Inicia el arrastre de la ventana"""
+        self.start_x = event.x_root - self.bubble_window.winfo_x()
+        self.start_y = event.y_root - self.bubble_window.winfo_y()
+        
+    def drag_window(self, event):
+        """Arrastra la ventana"""
+        x = event.x_root - self.start_x
+        y = event.y_root - self.start_y
+        self.bubble_window.geometry(f"+{x}+{y}")
+        
+    def start_camera(self):
+        """Inicia la captura de video para la burbuja"""
+        try:
+            self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+            
+            if not self.cap.isOpened():
+                self.video_label.config(text="Error: Cámara no disponible")
+                return
+                
+            # Configuración optimizada para burbuja
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
+            self.is_running = True
+            
+            # Iniciar hilo de video
+            self.video_thread = threading.Thread(target=self.update_video, daemon=True)
+            self.video_thread.start()
+            
+        except Exception as e:
+            self.video_label.config(text=f"Error: {str(e)}")
+            
+    def create_circular_image(self, image_pil):
+        """Crea una imagen circular con máscara"""
+        # Crear máscara circular
+        size = min(image_pil.size)
+        mask = Image.new('L', (size, size), 0)
+        
+        # Dibujar círculo blanco en la máscara
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0, size, size), fill=255)
+        
+        # Redimensionar imagen a cuadrado
+        image_square = image_pil.resize((size, size), Image.Resampling.LANCZOS)
+        
+        # Aplicar máscara circular
+        image_square.putalpha(mask)
+        
+        return image_square
+    
+    def update_video(self):
+        """Actualiza el video circular en la burbuja"""
+        frame_count = 0
+        
+        while self.is_running and self.cap and self.cap.isOpened():
+            try:
+                ret, frame = self.cap.read()
+                if ret:
+                    frame_count += 1
+                    
+                    # Procesar cada frame para la burbuja circular
+                    if frame_count % 1 == 0:  # Procesar todos los frames
+                        # Redimensionar para la burbuja circular
+                        bubble_size = self.bubble_size - 20  # Dejar margen para el borde
+                        frame_resized = cv2.resize(frame, (bubble_size, bubble_size))
+                        
+                        # Convertir a RGB
+                        frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+                        
+                        # Convertir a PIL
+                        image_pil = Image.fromarray(frame_rgb)
+                        
+                        # Crear imagen circular
+                        circular_image = self.create_circular_image(image_pil)
+                        
+                        # Convertir a PhotoImage
+                        image_tk = ImageTk.PhotoImage(circular_image)
+                        
+                        # Actualizar de forma thread-safe
+                        if self.bubble_window and self.bubble_window.winfo_exists():
+                            self.bubble_window.after(0, self.update_video_label, image_tk)
+                        else:
+                            break
+                            
+                time.sleep(0.033)  # ~30 FPS
+                
+            except Exception as e:
+                print(f"Error en video de burbuja: {e}")
+                break
+                
+    def update_video_label(self, image_tk):
+        """Actualiza el label de video de forma thread-safe"""
+        if self.is_running and self.video_label:
+            self.video_label.config(image=image_tk, text="")
+            self.video_label.image = image_tk
+            
+    def close_bubble(self):
+        """Cierra la ventana burbuja"""
+        self.is_running = False
+        
+        if self.cap:
+            self.cap.release()
+            
+        if self.bubble_window:
+            self.bubble_window.destroy()
 
 class CameraApp:
     def __init__(self, root):
@@ -302,13 +481,32 @@ class CameraApp:
         self.root.after(33, self.update_frame)  # ~30 FPS
     
     def open_bubble_cam(self):
-        """Abre la ventana de bubble cam (funcionalidad futura)"""
-        messagebox.showinfo(
-            "Bubble Cam", 
-            "Funcionalidad de Bubble Cam en desarrollo.\n\n"
-            "Esta característica creará una burbuja flotante\n"
-            "en el escritorio con la vista de la cámara."
-        )
+        """Abre la ventana flotante Bubble Cam"""
+        if not self.is_running:
+            messagebox.showwarning("Advertencia", "Primero debes iniciar una cámara")
+            return
+            
+        selected = self.camera_var.get()
+        if not selected:
+            messagebox.showwarning("Advertencia", "No hay cámara seleccionada")
+            return
+            
+        # Extraer índice de cámara
+        try:
+            if "defecto" in selected.lower():
+                camera_index = 0
+            else:
+                camera_index = int(selected.split()[-1])
+        except:
+            camera_index = 0
+            
+        try:
+            # Crear ventana flotante Bubble Cam
+            bubble_cam = BubbleCamWindow(camera_index)
+            messagebox.showinfo("Bubble Cam", "¡Ventana flotante creada!\n\nPuedes arrastrarla por toda la pantalla.\nUsa el botón ✕ para cerrarla.")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al crear Bubble Cam: {str(e)}")
     
     def close_app(self):
         """Cierra la aplicación"""

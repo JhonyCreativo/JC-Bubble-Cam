@@ -68,8 +68,25 @@ Aplicación de escritorio para visualización de cámaras web con interfaz moder
 1. **Detección automática de cámaras** - La aplicación detecta automáticamente las cámaras disponibles
 2. **Selección de cámara** - Usa el menú desplegable para elegir la cámara
 3. **Vista previa optimizada** - Haz clic en "Iniciar Cámara" para ver la transmisión en tiempo real
-4. **Bubble Cam** - Función especial que se activa cuando la cámara está funcionando
+4. **🎥 Bubble Cam Circular Transparente (Estilo Loom)** - Crea una ventana flotante circular arrastrable en el escritorio con la cámara activa
+   - Diseño circular perfecto como las burbujas de Loom
+   - **Fondo completamente transparente** - El escritorio se ve a través de la burbuja
+   - Máscara de video circular automática
+   - Transparencia real del sistema operativo Windows
+   - Ventana siempre visible (topmost)
+   - Completamente arrastrable por toda la pantalla
+   - Sin bordes rectangulares del sistema
+   - Borde semi-transparente elegante
+   - Botón de cierre discreto integrado
+   - Video optimizado en formato circular de 150x150 píxeles
+   - Integración visual perfecta con el escritorio
 5. **Interfaz responsiva** - Optimizada para un rendimiento fluido
+
+### Cómo usar Bubble Cam
+1. **Inicia una cámara** desde la aplicación principal
+2. **Haz clic en "Abrir Bubble Cam"** 
+3. **Arrastra la burbuja** por toda la pantalla desde la barra de título
+4. **Cierra la burbuja** con el botón ✕ cuando termines
 
 ## Optimizaciones de Rendimiento
 
@@ -106,7 +123,7 @@ jc-bubble-cam/
 
 ## Funcionalidades Futuras
 
-🔄 Bubble Cam flotante en escritorio  
+✅ Bubble Cam flotante transparente en escritorio  
 🔄 Configuración de resolución  
 🔄 Grabación de video  
 🔄 Captura de fotos  
