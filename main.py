@@ -34,19 +34,20 @@ class BubbleCamWindow:
         self.bubble_window.title("JC Bubble Cam")
         
         # Configurar ventana circular con transparencia
-        self.bubble_size = 160  # Tamaño ligeramente mayor para mejor calidad
+        self.bubble_size = 200  # Tamaño ligeramente mayor para mejor calidad
         self.bubble_window.geometry(f"{self.bubble_size}x{self.bubble_size}+100+100")
         self.bubble_window.resizable(False, False)
         self.bubble_window.attributes('-topmost', True)  # Siempre visible
         self.bubble_window.overrideredirect(True)  # Sin bordes del sistema
-        self.bubble_window.configure(bg='white')  # Fondo blanco para el borde
+        self.bubble_window.configure(bg='white', padx=0, pady=0)  # Fondo blanco sin padding
         
         # Crear canvas para la forma circular
         self.canvas = tk.Canvas(self.bubble_window, 
                                width=self.bubble_size, 
                                height=self.bubble_size,
-                               bg='white', highlightthickness=0)
-        self.canvas.pack()
+                               bg='white', highlightthickness=0,
+                               bd=0, relief='flat')
+        self.canvas.pack(fill='both', expand=True, padx=0, pady=0)
         
         # Aplicar forma circular usando Windows API después de que la ventana se muestre
         self.bubble_window.after(100, self.apply_circular_shape)
@@ -149,8 +150,8 @@ class BubbleCamWindow:
     def create_circular_image(self, image_pil):
         """Crea una imagen circular con borde blanco perfecto y antialiasing"""
         final_size = self.bubble_size
-        border_width = 8  # Borde blanco
-        supersample = 4  # Factor de supersampling para antialiasing
+        border_width = 4  # Borde blanco (más delgado)
+        supersample = 8  # Factor de supersampling para antialiasing perfecto
         
         # Tamaños de trabajo con supersampling
         work_size = final_size * supersample
