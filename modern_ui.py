@@ -106,7 +106,7 @@ class ModernCameraApp:
         # Botón para abrir burbuja
         self.bubble_button = ctk.CTkButton(
             buttons_frame,
-            text="🫧 Crear Burbuja de Cámara",
+            text="🫧 Abrir Bubble",
             command=self.open_bubble_cam,
             width=200,
             height=50,
@@ -253,7 +253,7 @@ class ModernCameraApp:
                 self.update_status("🫧 Burbuja de cámara creada exitosamente", "green")
                 
                 # Actualizar texto del botón
-                self.bubble_button.configure(text="🔄 Recrear Burbuja")
+                self.bubble_button.configure(text="🔄 Recrear Bubble")
                 
             except Exception as e:
                 self.update_status(f"❌ Error al crear burbuja: {str(e)[:50]}...", "red")
