@@ -104,9 +104,13 @@ Aplicación de escritorio para visualización de cámaras web con interfaz moder
 
 ```
 jc-bubble-cam/
-├── main.py              # Aplicación principal
+├── main.py              # Aplicación principal con interfaz clásica y Bubble Cam
+├── modern_ui.py         # Interfaz moderna con CustomTkinter
 ├── requirements.txt     # Dependencias de Python
-└── README.md           # Este archivo
+├── start.bat           # Script de inicio automático para Windows
+├── README.md           # Este archivo
+├── screenshots/        # Capturas de pantalla del proyecto
+└── venv/              # Entorno virtual (generado automáticamente)
 ```
 
 ## Dependencias

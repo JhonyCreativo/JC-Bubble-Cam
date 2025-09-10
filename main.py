@@ -6,7 +6,6 @@ import threading
 import time
 import os
 import ctypes
-from ctypes import wintypes
 
 # Optimizaciones de rendimiento
 os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'  # Desactivar MSMF para mejor rendimiento
